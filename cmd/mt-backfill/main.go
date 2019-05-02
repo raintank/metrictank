@@ -46,9 +46,11 @@ var (
 	gcIntervalStr     = flag.String("gc-interval", "2m", "gc interval.")
 	publicOrg         = flag.Int("public-org", 0, "org Id")
 	timeout           = flag.Int("timeout", 10, "the tool will exit if no kafka message is received during this interval ")
+	logLevel          = flag.String("log-level", "info", "log level. panic|fatal|error|warning|info|debug")
 
 	// backfilling
 	lastRcvTime int64        // epoch time when the previous kafka message was received
+	rcvdPoints  int64        // number of received datapoints
 	mux         sync.Mutex   // mutex to protect lastRcvTime
 	handler     inputHandler // input message handler to track the last kafka receive event and handles kafka messages
 )
@@ -73,6 +75,10 @@ func (ih inputHandler) ProcessMetricData(metric *schema.MetricData, partition in
 	mux.Lock()
 	defer mux.Unlock()
 	lastRcvTime = int64(time.Now().Unix())
+	rcvdPoints++
+	if rcvdPoints%10000 == 0 {
+		log.Infof("Received %d datapoints", rcvdPoints)
+	}
 }
 
 // input.Handler interface
@@ -81,18 +87,26 @@ func (ih inputHandler) ProcessMetricPoint(point schema.MetricPoint, format msg.F
 	mux.Lock()
 	defer mux.Unlock()
 	lastRcvTime = int64(time.Now().Unix())
+	rcvdPoints++
+	if rcvdPoints%10000 == 0 {
+		log.Infof("Received %d datapoints", rcvdPoints)
+	}
 }
 
 func main() {
-	log.Infof("metrictank backfilling")
-
 	flag.Parse()
 
 	// logger
 	formatter := &logger.TextFormatter{}
-	formatter.TimestampFormat = "2019-03-21 10:00:00.000"
+	formatter.TimestampFormat = "2006-01-02 15:04:05.000"
 	log.SetFormatter(formatter)
-	log.SetLevel(log.InfoLevel)
+	lvl, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatalf("failed to parse log-level, %s", err.Error())
+	}
+	log.SetLevel(lvl)
+	log.Infof("logging level set to '%s'", *logLevel)
+	log.Infof("metrictank backfilling")
 
 	// Only try and parse the conf file if it exists
 	path := ""
