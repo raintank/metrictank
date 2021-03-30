@@ -831,6 +831,9 @@ type consolidatorTuple struct {
 // we will collect all the individual series from the peer, and then sum here. that could be optimized
 func (s *Server) executePlan(ctx context.Context, orgId uint32, plan *expr.Plan) ([]models.Series, models.RenderMeta, error) {
 	var meta models.RenderMeta
+	traceID, _ := tracing.ExtractTraceID(ctx)
+
+	log.Infof("executePlan: Starting traceID=%s req %v", traceID, plan.Reqs)
 
 	reqs := NewReqMap()
 	metaTagEnrichmentData := make(map[string]tagquery.Tags)
@@ -845,6 +848,11 @@ func (s *Server) executePlan(ctx context.Context, orgId uint32, plan *expr.Plan)
 			To:    r.To,
 		}
 		resolveSeriesRequests[strippedreq] = append(resolveSeriesRequests[strippedreq], plan.Reqs[i])
+	}
+
+	// Output to see how useful this optimization might be
+	if len(resolveSeriesRequests) != len(plan.Reqs) {
+		log.Infof("executePlan: traceID=%s Making %d roundtrips to resolve %d reqs", traceID, len(resolveSeriesRequests), len(plan.Reqs))
 	}
 
 	// note that different patterns to query can have different from / to, so they require different index lookups
@@ -1040,6 +1048,12 @@ func (s *Server) executePlan(ctx context.Context, orgId uint32, plan *expr.Plan)
 	meta.RenderStats.PlanRunDuration = time.Since(preRun)
 	planRunDuration.Value(meta.RenderStats.PlanRunDuration)
 	span.LogFields(traceLog.Float64("PlanRunMillis", durToMillis(meta.RenderStats.PlanRunDuration)))
+
+	// Log finished stats
+	// TODO - reusable buffer
+	prettyMeta, _ := meta.MarshalJSONFast(nil)
+	log.Infof("executePlan: Completed traceID=%s meta=%s err=%v", traceID, string(prettyMeta), err)
+
 	return out, meta, err
 }
 
