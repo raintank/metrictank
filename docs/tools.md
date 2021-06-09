@@ -27,6 +27,27 @@ Flags:
 ```
 
 
+## mt-backfill
+
+```
+Usage of ./mt-backfill:
+  -chunk-max-stale string
+    	chunk max stale age. (default "1m")
+  -config string
+    	config file path (default "/etc/metrictank/metrictank.ini")
+  -gc-interval string
+    	gc interval. (default "2m")
+  -log-level string
+    	log level. panic|fatal|error|warning|info|debug (default "info")
+  -metric-max-stale string
+    	metric max stale age. (default "5m")
+  -public-org int
+    	org Id
+  -timeout int
+    	the tool will exit if no kafka message is received during this interval  (default 10)
+```
+
+
 ## mt-explain
 
 ```
