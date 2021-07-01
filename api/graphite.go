@@ -850,11 +850,6 @@ func (s *Server) executePlan(ctx context.Context, orgId uint32, plan *expr.Plan)
 		resolveSeriesRequests[strippedreq] = append(resolveSeriesRequests[strippedreq], plan.Reqs[i])
 	}
 
-	// Output to see how useful this optimization might be
-	if len(resolveSeriesRequests) != len(plan.Reqs) {
-		log.Infof("executePlan: traceID=%s Making %d roundtrips to resolve %d reqs", traceID, len(resolveSeriesRequests), len(plan.Reqs))
-	}
-
 	// note that different patterns to query can have different from / to, so they require different index lookups
 	// e.g. target=movingAvg(foo.*, "1h")&target=foo.*
 	// note that in this case we fetch foo.* twice. can be optimized later

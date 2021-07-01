@@ -66,8 +66,9 @@ func Logger() macaron.Handler {
 			paramsAsString += "?"
 			paramsAsString += ctx.Req.Form.Encode()
 		} else {
-			// requests that use POST with types like application/json will have the data in the body
-			//...which has already been read in by this point and we are totally screwed :/
+			// requests that use POST with non-form content-types (e.g application/json) will have the data in the body
+			// At this point the body will have already been read in, so we cannot retrieve it. Perhaps the deserialized body
+			// can be retrieved from the context?
 		}
 
 		fmt.Fprintf(&content, " msg=\"%s %s%s (%v) %v\" orgID=%d", ctx.Req.Method, ctx.Req.URL.Path, paramsAsString, rw.Status(), time.Since(start), ctx.OrgId)
