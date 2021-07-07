@@ -291,6 +291,10 @@ func NewSeriesPickleItem(path string, isLeaf bool, intervals [][]int64) SeriesPi
 
 type SeriesTree []SeriesTreeItem
 
+func (s SeriesTree) Len() int           { return len(s) }
+func (s SeriesTree) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s SeriesTree) Less(i, j int) bool { return s[i].Text < s[j].Text }
+
 func (s *SeriesTree) Add(i *SeriesTreeItem) {
 	*s = append(*s, *i)
 }

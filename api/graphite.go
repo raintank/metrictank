@@ -676,6 +676,7 @@ func FindTreejson(query string, nodes []idx.Node) models.SeriesTree {
 		}
 		tree.Add(&t)
 	}
+	sort.Sort(models.SeriesTree(tree))
 	return tree
 }
 
