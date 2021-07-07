@@ -41,6 +41,14 @@ func (s *graphiteProxyStats) Miss(fun string) {
 
 func NewGraphiteProxy(u *url.URL) *httputil.ReverseProxy {
 	graphiteProxy := httputil.NewSingleHostReverseProxy(u)
+
+	// workaround for net/http/httputil issue https://github.com/golang/go/issues/28168
+	originalDirector := graphiteProxy.Director
+	graphiteProxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.Host = req.URL.Host
+	}
+
 	// remove these headers from upstream. we will set our own correct ones
 	graphiteProxy.ModifyResponse = func(resp *http.Response) error {
 		// if kept, would be duplicated. and duplicated headers are illegal)
