@@ -9,6 +9,7 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	tags "github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
+	"github.com/uber/jaeger-client-go"
 )
 
 // NewSpan pulls the span out of the context, creates a new child span, and updates the context
@@ -35,4 +36,18 @@ func Errorf(span opentracing.Span, format string, a ...interface{}) {
 // Failure marks the current request as a failure
 func Failure(span opentracing.Span) {
 	tags.Error.Set(span, true)
+}
+
+// ExtractTraceID attempts to extract the traceID from a Context
+func ExtractTraceID(ctx context.Context) (string, bool) {
+	sp := opentracing.SpanFromContext(ctx)
+	if sp == nil {
+		return "", false
+	}
+	sctx, ok := sp.Context().(jaeger.SpanContext)
+	if !ok {
+		return "", false
+	}
+
+	return sctx.TraceID().String(), sctx.IsSampled()
 }

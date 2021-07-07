@@ -2,18 +2,16 @@ package middleware
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/grafana/metrictank/tracing"
 	"github.com/grafana/metrictank/util"
 
-	opentracing "github.com/opentracing/opentracing-go"
 	log "github.com/sirupsen/logrus"
-	jaeger "github.com/uber/jaeger-client-go"
 	macaron "gopkg.in/macaron.v1"
 )
 
@@ -54,7 +52,7 @@ func Logger() macaron.Handler {
 		var content strings.Builder
 		fmt.Fprintf(&content, "ts=%s", time.Now().Format(time.RFC3339Nano))
 
-		traceID, sampled := extractTraceID(ctx.Req.Context())
+		traceID, sampled := tracing.ExtractTraceID(ctx.Req.Context())
 		if traceID != "" {
 			fmt.Fprintf(&content, " traceID=%s, sampled=%t", traceID, sampled)
 		}
@@ -67,6 +65,10 @@ func Logger() macaron.Handler {
 		if len(ctx.Req.Form) > 0 {
 			paramsAsString += "?"
 			paramsAsString += ctx.Req.Form.Encode()
+		} else {
+			// requests that use POST with non-form content-types (e.g application/json) will have the data in the body
+			// At this point the body will have already been read in, so we cannot retrieve it. Perhaps the deserialized body
+			// can be retrieved from the context?
 		}
 
 		fmt.Fprintf(&content, " msg=\"%s %s%s (%v) %v\" orgID=%d", ctx.Req.Method, ctx.Req.URL.Path, paramsAsString, rw.Status(), time.Since(start), ctx.OrgId)
@@ -119,17 +121,4 @@ func extractHeaders(req *http.Request) (string, error) {
 		return "", err
 	}
 	return url.PathEscape(string(b.Bytes())), nil
-}
-
-func extractTraceID(ctx context.Context) (string, bool) {
-	sp := opentracing.SpanFromContext(ctx)
-	if sp == nil {
-		return "", false
-	}
-	sctx, ok := sp.Context().(jaeger.SpanContext)
-	if !ok {
-		return "", false
-	}
-
-	return sctx.TraceID().String(), sctx.IsSampled()
 }
