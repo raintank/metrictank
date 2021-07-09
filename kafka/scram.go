@@ -1,4 +1,4 @@
-package kafkamdm
+package kafka
 
 import (
 	"crypto/sha256"

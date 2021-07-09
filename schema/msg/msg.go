@@ -140,3 +140,18 @@ func ReadPointMsg(data []byte, defaultOrg uint32) ([]byte, schema.MetricPoint, e
 	}
 	return data, point, fmt.Errorf(errFmtUnsupportedFormat, version)
 }
+
+func IsIndexControlMsg(data []byte) bool {
+	l := len(data)
+	if l == 0 {
+		return false
+	}
+	version := Format(data[0])
+	return version == FormatIndexControlMessage
+}
+
+func ReadIndexControlMsg(data []byte) (schema.ControlMsg, error) {
+	var control schema.ControlMsg
+	_, err := control.UnmarshalMsg(data[1:])
+	return control, err
+}

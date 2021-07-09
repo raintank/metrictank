@@ -10,4 +10,5 @@ const (
 	FormatMetricDataArrayMsgp
 	FormatMetricPoint
 	FormatMetricPointWithoutOrg
+	FormatIndexControlMessage
 )

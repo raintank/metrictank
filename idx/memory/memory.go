@@ -1826,6 +1826,68 @@ ORGS:
 	return pruned, nil
 }
 
+// AddDef adds def to the index.
+func (m *UnpartitionedMemoryIdx) AddDefs(defs []schema.MetricDefinition) {
+	// TODO - refactor from AddOrUpdate
+	for _, def := range defs {
+		pre := time.Now()
+		m.RLockHigh()
+		existing, ok := m.defById[def.Id]
+		m.RUnlockHigh()
+		if ok {
+			updateExisting(existing, def.Partition, def.LastUpdate, pre)
+			continue
+		}
+		archive := createArchive(&def)
+		if m.writeQueue == nil {
+			// writeQueue not enabled, so acquire a wlock and immediately add to the index.
+			bc := m.Lock()
+			m.add(archive)
+			bc.Unlock("AddDefs", nil)
+			statAddDuration.Value(time.Since(pre))
+		} else {
+			// push the new archive into the writeQueue. If there is already an archive in the
+			// writeQueue with the same mkey, it will be replaced.
+			m.writeQueue.Queue(archive)
+		}
+	}
+}
+
+// DeleteDefs deletes the matching defs.
+func (m *UnpartitionedMemoryIdx) DeleteDefs(defs []schema.MetricDefinition, archive bool) {
+	// TODO - finer grained locking
+	bc := m.Lock()
+	defer bc.Unlock("DeleteDefs", nil)
+
+	taggedIds := make(map[uint32]IdSet)
+	for _, def := range defs {
+		if len(def.Tags) == 0 {
+			tree, ok := m.tree[def.OrgId]
+			if !ok {
+				continue
+			}
+
+			n, ok := tree.Items[def.Name]
+			if !ok || !n.Leaf() {
+				continue
+			}
+
+			// SEAN TODO - This seems like this could overdelete (if multiple defs for this path)
+			m.delete(def.OrgId, n, true, false)
+			m.findCache.InvalidateFor(def.OrgId, n.Path)
+		} else {
+			if _, ok := taggedIds[def.OrgId]; !ok {
+				taggedIds[def.OrgId] = make(IdSet)
+			}
+			taggedIds[def.OrgId][def.Id] = struct{}{}
+		}
+	}
+
+	for org, ids := range taggedIds {
+		m.deleteTaggedByIdSet(org, ids)
+	}
+}
+
 func getMatcher(path string) (func([]string) []string, error) {
 	// Matches everything
 	if path == "*" {

@@ -115,6 +115,10 @@ the number of nodes we know to be secondary and not ready
 the number of nodes we know to be secondary and ready
 * `idx.bigtable.add`:  
 the duration of an add of one metric to the bigtable idx, including the add to the in-memory index, excluding the insert query
+* `idx.bigtable.control.add`:  
+the duration of add control messages processed
+* `idx.bigtable.control.delete`:  
+the duration of delete control messages processed
 * `idx.bigtable.delete`:  
 the duration of a delete of one or more metrics from the bigtable idx, including the delete from the in-memory index and the delete query
 * `idx.bigtable.prune`:  
@@ -145,6 +149,10 @@ how many delete queries for a metric completed successfully (triggered by an upd
 how many insert queries for a metric completed successfully (triggered by an add or an update)
 * `idx.cassandra.add`:  
 the duration of an add of one metric to the cassandra idx, including the add to the in-memory index, excluding the insert query
+* `idx.cassandra.control.add`:  
+the duration of add control messages processed
+* `idx.cassandra.control.delete`:  
+the duration of delete control messages processed
 * `idx.cassandra.delete`:  
 the duration of a delete of one or more metrics from the cassandra idx, including the delete from the in-memory index and the delete query
 * `idx.cassandra.error.cannot-achieve-consistency`:  

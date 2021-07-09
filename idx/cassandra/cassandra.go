@@ -50,7 +50,13 @@ var (
 	statDeleteDuration = stats.NewLatencyHistogram15s32("idx.cassandra.delete")
 	// metric idx.cassandra.save.skipped is how many saves have been skipped due to the writeQueue being full
 	statSaveSkipped = stats.NewCounter32("idx.cassandra.save.skipped")
-	errmetrics      = cassandra.NewErrMetrics("idx.cassandra")
+
+	// metric idx.cassandra.control.add is the duration of add control messages processed
+	statControlRestoreDuration = stats.NewLatencyHistogram15s32("idx.cassandra.control.add")
+	// metric idx.cassandra.control.delete is the duration of delete control messages processed
+	statControlDeleteDuration = stats.NewLatencyHistogram15s32("idx.cassandra.control.delete")
+
+	errmetrics = cassandra.NewErrMetrics("idx.cassandra")
 )
 
 type writeReq struct {
@@ -441,8 +447,8 @@ func (c *CasIdx) ArchiveDefs(defs []schema.MetricDefinition) (int, error) {
 					err := c.addDefToArchive(*def)
 					if err != nil {
 						// If we failed to add the def to the archive table then just continue on to the next def.
-						// As we haven't yet removed the this def from the metric index table yet, the next time archiving
-						// is performed the this def will be processed again. As no action is needed by an operator, we
+						// As we haven't yet removed  this def from the metric index table yet, the next time archiving
+						// is performed this def will be processed again. As no action is needed by an operator, we
 						// just log this as a warning.
 						log.Warnf("cassandra-idx: Failed add def to archive table. error=%s. def=%+v", err, *def)
 						continue
@@ -714,4 +720,43 @@ func (c *CasIdx) prune() {
 			return
 		}
 	}
+}
+
+// AddDefs add defs to the index.
+func (c *CasIdx) AddDefs(defs []schema.MetricDefinition) {
+	pre := time.Now()
+
+	c.MemoryIndex.AddDefs(defs)
+
+	if c.Config.updateCassIdx {
+		// Blocking write to make sure all get enqueued
+		for _, def := range defs {
+			c.writeQueue <- writeReq{recvTime: time.Now(), def: &def}
+		}
+	}
+
+	statControlRestoreDuration.Value(time.Since(pre))
+}
+
+// DeleteDefs delete the matching defs, conditionally writing an archive record.
+func (c *CasIdx) DeleteDefs(defs []schema.MetricDefinition, archive bool) {
+	pre := time.Now()
+
+	c.MemoryIndex.DeleteDefs(defs, archive)
+
+	if c.Config.updateCassIdx {
+		// TODO - this could create a lot of go routines if many deletes come in at the same time
+		// Maybe better to enhance the write queue to process these?
+		if archive {
+			c.ArchiveDefs(defs)
+		} else {
+			go func() {
+				for _, def := range defs {
+					c.deleteDef(def.Id, def.Partition)
+				}
+			}()
+		}
+	}
+
+	statControlDeleteDuration.Value(time.Since(pre))
 }

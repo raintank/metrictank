@@ -43,12 +43,14 @@ type IndexFindByTag struct {
 	OrgId uint32   `json:"orgId" binding:"Required"`
 	Expr  []string `json:"expressions"`
 	From  int64    `json:"from"`
+	To    int64    `json:"to"`
 }
 
 func (t IndexFindByTag) Trace(span opentracing.Span) {
 	span.SetTag("orgId", t.OrgId)
 	span.LogFields(
 		traceLog.Int64("from", t.From),
+		traceLog.Int64("to", t.To),
 		traceLog.String("expressions", fmt.Sprintf("%q", t.Expr)),
 	)
 }

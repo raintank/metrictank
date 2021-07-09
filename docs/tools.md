@@ -27,6 +27,13 @@ Flags:
 ```
 
 
+## mt-control-server
+
+```
+Usage of ./mt-control-server:
+```
+
+
 ## mt-explain
 
 ```

@@ -370,7 +370,7 @@ func (s *Server) indexFindByTag(ctx *middleware.Context, req models.IndexFindByT
 		return
 	}
 
-	query, err := tagquery.NewQueryFromStrings(req.Expr, req.From, 0)
+	query, err := tagquery.NewQueryFromStrings(req.Expr, req.From, req.To)
 	if err != nil {
 		response.Write(ctx, response.NewError(http.StatusBadRequest, err.Error()))
 		return

@@ -872,7 +872,7 @@ func (s *Server) executePlan(ctx context.Context, orgId uint32, plan *expr.Plan)
 			if err != nil {
 				return nil, meta, err
 			}
-			series, err = s.clusterFindByTag(ctx, orgId, exprs, int64(r.From), findLimit, false)
+			series, err = s.clusterFindByTag(ctx, orgId, exprs, int64(r.From), 0, findLimit, false)
 		} else {
 			series, err = s.findSeries(ctx, orgId, []string{r.Query}, int64(r.From), true, findLimit)
 		}
@@ -1187,7 +1187,7 @@ func (s *Server) graphiteTagFindSeries(ctx *middleware.Context, request models.G
 		isSoftLimit = false
 	}
 
-	series, err := s.clusterFindByTag(reqCtx, ctx.OrgId, expressions, request.From, limit, isSoftLimit)
+	series, err := s.clusterFindByTag(reqCtx, ctx.OrgId, expressions, request.From, request.To, limit, isSoftLimit)
 	if err != nil {
 		response.Write(ctx, response.WrapError(err))
 		return
@@ -1236,13 +1236,28 @@ func (s *Server) graphiteTagFindSeries(ctx *middleware.Context, request models.G
 		} else {
 			response.Write(ctx, response.NewJson(200, seriesNames, ""))
 		}
+	case "full-json":
+		retval := models.GraphiteTagFindSeriesFullResp{Warnings: warnings}
+		retval.Series = make([]schema.MetricDefinition, 0, len(series))
+		for _, serie := range series {
+			for _, node := range serie.Series {
+				for _, ndef := range node.Defs {
+					// This *could* exceed our "limit" with multiple definitions per series.
+					// Logically, they should all be returned if matched. Since they are
+					// grouped together, we can consider them one series.
+					retval.Series = append(retval.Series, ndef.MetricDefinition)
+				}
+			}
+		}
+
+		response.Write(ctx, response.NewJson(200, retval, ""))
 	}
 }
 
 // clusterFindByTag returns the Series matching the given expressions.
 // If maxSeries is > 0, it specifies a limit which will truncate the resultset (if softLimit is true) or return an error otherwise.
-func (s *Server) clusterFindByTag(ctx context.Context, orgId uint32, expressions tagquery.Expressions, from int64, maxSeries int, softLimit bool) ([]Series, error) {
-	data := models.IndexFindByTag{OrgId: orgId, Expr: expressions.Strings(), From: from}
+func (s *Server) clusterFindByTag(ctx context.Context, orgId uint32, expressions tagquery.Expressions, from, to int64, maxSeries int, softLimit bool) ([]Series, error) {
+	data := models.IndexFindByTag{OrgId: orgId, Expr: expressions.Strings(), From: from, To: to}
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	responseChan, errorChan := s.queryAllShardsGeneric(newCtx, "clusterFindByTag",

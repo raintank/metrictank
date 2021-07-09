@@ -30,6 +30,7 @@ func ConfigSetup() {
 type Handler interface {
 	ProcessMetricData(md *schema.MetricData, partition int32)
 	ProcessMetricPoint(point schema.MetricPoint, format msg.Format, partition int32)
+	ProcessIndexControlMsg(msg schema.ControlMsg, partition int32)
 }
 
 // TODO: clever way to document all metrics for all different inputs
@@ -181,4 +182,17 @@ func (in DefaultHandler) ProcessMetricData(md *schema.MetricData, partition int3
 
 	m := in.metrics.GetOrCreate(mkey, archive.SchemaId, archive.AggId, uint32(md.Interval))
 	m.Add(uint32(md.Time), md.Value)
+}
+
+// ProcessIndexControlMsg updates the index if possible
+// concurrency-safe.
+func (in DefaultHandler) ProcessIndexControlMsg(msg schema.ControlMsg, partition int32) {
+	switch msg.Op {
+	case schema.OpRemove:
+		in.metricIndex.DeleteDefs(msg.Defs, false)
+	case schema.OpArchive:
+		in.metricIndex.DeleteDefs(msg.Defs, true)
+	case schema.OpRestore:
+		in.metricIndex.AddDefs(msg.Defs)
+	}
 }

@@ -115,6 +115,10 @@ func (ip inputPrinter) ProcessMetricPoint(point schema.MetricPoint, format msg.F
 	}
 }
 
+func (ip inputPrinter) ProcessIndexControlMsg(msg schema.ControlMsg, partition int32) {
+
+}
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "mt-kafka-mdm-sniff")

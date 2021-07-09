@@ -1152,6 +1152,170 @@ func testBasicFind(t *testing.T) {
 	})
 }
 
+func TestControlFuncs(t *testing.T) {
+	withAndWithoutPartitionedIndex(withAndWithoutTagSupport(testControlFuncs))(t)
+}
+
+func testControlFuncs(t *testing.T) {
+	ix := New()
+	ix.Init()
+	defer ix.Stop()
+
+	// add bah series
+	for _, s := range getSeriesNames(1, 5, "metric.bah") {
+		d := &schema.MetricData{
+			Name:     s,
+			OrgId:    1,
+			Interval: 10,
+			Time:     1,
+		}
+		d.SetId()
+		mkey, err := schema.MKeyFromString(d.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ix.AddOrUpdate(mkey, d, getPartition(d))
+	}
+
+	// foo series
+	for _, s := range getSeriesNames(2, 5, "metric.foo") {
+		d := &schema.MetricData{
+			Name:     s,
+			OrgId:    1,
+			Interval: 10,
+			Time:     10,
+		}
+		d.SetId()
+		mkey, err := schema.MKeyFromString(d.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ix.AddOrUpdate(mkey, d, getPartition(d))
+	}
+
+	Convey("after populating index", t, func() {
+		defs := ix.List(1)
+		So(defs, ShouldHaveLength, 10)
+	})
+
+	bahdefs := make([]schema.MetricDefinition, 0, 5)
+	Convey("can delete some series", t, func() {
+		nodes, err := ix.Find(1, "metric.bah.*", 0, 0)
+		So(err, ShouldBeNil)
+		So(nodes, ShouldHaveLength, 5)
+
+		for _, node := range nodes {
+			for _, def := range node.Defs {
+				bahdefs = append(bahdefs, def.MetricDefinition)
+			}
+		}
+
+		ix.DeleteDefs(bahdefs, true)
+		ix.ForceInvalidationFindCache()
+
+		nodes, err = ix.Find(1, "metric.bah.*", 0, 0)
+		So(err, ShouldBeNil)
+		So(nodes, ShouldHaveLength, 0)
+		nodes, err = ix.Find(1, "metric.foo.*", 0, 0)
+		So(err, ShouldBeNil)
+		So(nodes, ShouldHaveLength, 5)
+
+	})
+
+	Convey("can add them back", t, func() {
+		ix.AddDefs(bahdefs)
+		// AddDefs invalidates the cache asynchronously, so add short pause
+		time.Sleep(50 * time.Millisecond)
+		ix.ForceInvalidationFindCache()
+
+		nodes, err := ix.Find(1, "metric.bah.*", 0, 0)
+		if len(nodes) != 5 {
+			nodes, err = ix.Find(1, "metric.bah.*", 0, 0)
+		}
+		So(err, ShouldBeNil)
+		So(nodes, ShouldHaveLength, 5)
+		nodes, err = ix.Find(1, "metric.foo.*", 0, 0)
+		So(err, ShouldBeNil)
+		So(nodes, ShouldHaveLength, 5)
+	})
+}
+
+func TestControlFuncsTagged(t *testing.T) {
+	withAndWithoutPartitionedIndex(testControlFuncsTagged)(t)
+}
+
+func testControlFuncsTagged(t *testing.T) {
+	ix := New()
+	ix.Init()
+	defer ix.Stop()
+
+	// add old series
+	series := getMetricData(1, 2, 5, 10, "longterm.old", true)
+	for _, s := range series {
+		s.Time = 1
+		s.SetId()
+		mkey, err := schema.MKeyFromString(s.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ix.AddOrUpdate(mkey, s, getPartition(s))
+	}
+	series = getMetricData(1, 2, 5, 10, "longterm.more-recent", true)
+	for _, s := range series {
+		s.Time = 50
+		s.SetId()
+		mkey, err := schema.MKeyFromString(s.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ix.AddOrUpdate(mkey, s, getPartition(s))
+	}
+
+	Convey("after populating index", t, func() {
+		defs := ix.List(1)
+		So(defs, ShouldHaveLength, 10)
+	})
+
+	deldefs := make([]schema.MetricDefinition, 0, 5)
+
+	Convey("Can delete some series", t, func() {
+		query, err := tagquery.NewQueryFromStrings([]string{"name=~longterm\\.old.*", "series_id=~[0-4]"}, 0, 0)
+		So(err, ShouldBeNil)
+		nodes := ix.FindByTag(1, query)
+		So(nodes, ShouldHaveLength, 5)
+
+		for _, node := range nodes {
+			for _, def := range node.Defs {
+				deldefs = append(deldefs, def.MetricDefinition)
+			}
+		}
+
+		ix.DeleteDefs(deldefs, true)
+
+		query, err = tagquery.NewQueryFromStrings([]string{"name=~longterm\\.old.*", "series_id=~[0-4]"}, 0, 0)
+		So(err, ShouldBeNil)
+		nodes = ix.FindByTag(1, query)
+		So(nodes, ShouldHaveLength, 0)
+		query, err = tagquery.NewQueryFromStrings([]string{"name=~longterm.*", "series_id=~[0-4]"}, 0, 0)
+		So(err, ShouldBeNil)
+		nodes = ix.FindByTag(1, query)
+		So(nodes, ShouldHaveLength, 5)
+	})
+
+	Convey("can add them back", t, func() {
+		ix.AddDefs(deldefs)
+
+		query, err := tagquery.NewQueryFromStrings([]string{"name=~longterm\\.old.*", "series_id=~[0-4]"}, 0, 0)
+		So(err, ShouldBeNil)
+		nodes := ix.FindByTag(1, query)
+		So(nodes, ShouldHaveLength, 5)
+		query, err = tagquery.NewQueryFromStrings([]string{"name=~longterm.*", "series_id=~[0-4]"}, 0, 0)
+		So(err, ShouldBeNil)
+		nodes = ix.FindByTag(1, query)
+		So(nodes, ShouldHaveLength, 10)
+	})
+}
+
 func TestSingleNodeMetric(t *testing.T) {
 	withAndWithoutPartitionedIndex(testSingleNodeMetric)(t)
 }

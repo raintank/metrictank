@@ -6,6 +6,7 @@
 /cmd-dev/mt-simulate-memory-idx-lock-contention/mt-simulate-memory-idx-lock-contention
 /cmd/metrictank/metrictank
 /cmd/mt-aggs-explain/mt-aggs-explain
+/cmd/mt-control-server/mt-control-server
 /cmd/mt-explain/mt-explain
 /cmd/mt-fakemetrics/mt-fakemetrics
 /cmd/mt-gateway/mt-gateway

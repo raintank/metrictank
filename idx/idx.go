@@ -151,6 +151,12 @@ type MetricIndex interface {
 	// DeleteTagged deletes the series returned by the given query from the tag index
 	// and also the DefById index.
 	DeleteTagged(orgId uint32, query tagquery.Query) ([]Archive, error)
+
+	// AddDefs adds defs to the index.
+	AddDefs(defs []schema.MetricDefinition)
+
+	// DeleteDefs deletes the matching defs, writing an archive record if archive is true (where supported).
+	DeleteDefs(defs []schema.MetricDefinition, archive bool)
 }
 
 type MetaRecordIdx interface {

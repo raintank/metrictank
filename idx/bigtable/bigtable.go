@@ -46,6 +46,12 @@ var (
 	statPruneDuration = stats.NewLatencyHistogram15s32("idx.bigtable.prune")
 	// metric idx.bigtable.delete is the duration of a delete of one or more metrics from the bigtable idx, including the delete from the in-memory index and the delete query
 	statDeleteDuration = stats.NewLatencyHistogram15s32("idx.bigtable.delete")
+
+	// metric idx.bigtable.control.add is the duration of add control messages processed
+	statControlRestoreDuration = stats.NewLatencyHistogram15s32("idx.bigtable.control.add")
+	// metric idx.bigtable.control.delete is the duration of delete control messages processed
+	statControlDeleteDuration = stats.NewLatencyHistogram15s32("idx.bigtable.control.delete")
+
 	// metric idx.bigtable.save.skipped is how many saves have been skipped due to the writeQueue being full
 	statSaveSkipped = stats.NewCounter32("idx.bigtable.save.skipped")
 	// metric idx.bigtable.save.bytes-per-request is the number of bytes written to bigtable in each request.
@@ -532,4 +538,39 @@ func (b *BigtableIdx) prune() {
 			return
 		}
 	}
+}
+
+// AddDefs adds defs to the index.
+func (b *BigtableIdx) AddDefs(defs []schema.MetricDefinition) {
+	pre := time.Now()
+
+	b.MemoryIndex.AddDefs(defs)
+
+	if b.cfg.UpdateBigtableIdx {
+		// Blocking write to make sure all get enqueued
+		for _, def := range defs {
+			b.writeQueue <- writeReq{recvTime: time.Now(), def: &def}
+		}
+	}
+
+	statControlRestoreDuration.Value(time.Since(pre))
+}
+
+// DeleteDefs deletes the matching key.
+func (b *BigtableIdx) DeleteDefs(defs []schema.MetricDefinition, archive bool) {
+	pre := time.Now()
+
+	b.MemoryIndex.DeleteDefs(defs, archive)
+
+	if b.cfg.UpdateBigtableIdx {
+		// TODO - this could create a lot of go routines if many deletes come in at the same time
+		// Maybe better to enhance the write queue to process these?
+		go func() {
+			for _, def := range defs {
+				b.deleteDef(&def)
+			}
+		}()
+	}
+
+	statControlDeleteDuration.Value(time.Since(pre))
 }

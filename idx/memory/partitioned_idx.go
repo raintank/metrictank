@@ -594,3 +594,19 @@ func mergePartitionStringResults(partitionResults [][]string) []string {
 
 	return response
 }
+
+// AddDef adds def to the index.
+func (p *PartitionedMemoryIdx) AddDefs(defs []schema.MetricDefinition) {
+	// TODO - make batches by partition
+	for _, def := range defs {
+		p.Partition[def.Partition].AddDefs([]schema.MetricDefinition{def})
+	}
+}
+
+// DeleteDefs deletes the matching defs.
+func (p *PartitionedMemoryIdx) DeleteDefs(defs []schema.MetricDefinition, archive bool) {
+	// TODO - make batches by partition
+	for _, def := range defs {
+		p.Partition[def.Partition].DeleteDefs([]schema.MetricDefinition{def}, archive)
+	}
+}

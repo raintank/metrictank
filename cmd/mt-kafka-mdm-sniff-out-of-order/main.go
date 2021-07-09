@@ -151,6 +151,10 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 	ip.lock.Unlock()
 }
 
+func (ip *inputOOOFinder) ProcessIndexControlMsg(msg schema.ControlMsg, partition int32) {
+
+}
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "mt-kafka-mdm-sniff-out-of-order")

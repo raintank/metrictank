@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-macaron/binding"
 	"github.com/grafana/metrictank/idx"
+	"github.com/grafana/metrictank/schema"
 	pickle "github.com/kisielk/og-rek"
 	opentracing "github.com/opentracing/opentracing-go"
 	traceLog "github.com/opentracing/opentracing-go/log"
@@ -28,6 +29,7 @@ import (
 //msgp:ignore GraphiteTagFindSeriesResp
 //msgp:ignore GraphiteTagFindSeriesLastTsResp
 //msgp:ignore GraphiteTagFindSeriesMetaResp
+//msgp:ignore GraphiteTagFindSeriesFullResp
 //msgp:ignore GraphiteTagResp
 //msgp:ignore GraphiteTags
 //msgp:ignore GraphiteTagsResp
@@ -123,7 +125,8 @@ type GraphiteTagDetailsValueResp struct {
 type GraphiteTagFindSeries struct {
 	Expr   []string `json:"expr" form:"expr"`
 	From   int64    `json:"from" form:"from"`
-	Format string   `json:"format" form:"format" binding:"In(,series-json,lastts-json);Default(series-json)"`
+	To     int64    `json:"to" form:"to"`
+	Format string   `json:"format" form:"format" binding:"In(,series-json,lastts-json,full-json);Default(series-json)"`
 	Limit  int      `json:"limit" binding:"Default(0)"`
 	Meta   bool     `json:"meta" binding:"Default(false)"`
 }
@@ -145,6 +148,11 @@ type GraphiteTagFindSeriesLastTsResp struct {
 type GraphiteTagFindSeriesMetaResp struct {
 	Series   []string `json:"series"`
 	Warnings []string `json:"warnings,omitempty"`
+}
+
+type GraphiteTagFindSeriesFullResp struct {
+	Series   []schema.MetricDefinition `json:"series"`
+	Warnings []string                  `json:"warnings,omitempty"`
 }
 
 type GraphiteTagDelSeries struct {

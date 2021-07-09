@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/Shopify/sarama/tools/tls"
 	"github.com/grafana/globalconf"
 	"github.com/grafana/metrictank/kafka"
 	"github.com/grafana/metrictank/stats"
@@ -30,14 +29,7 @@ var backlogProcessTimeoutStr string
 var partitionOffset map[int32]*stats.Gauge64
 var partitionLogSize map[int32]*stats.Gauge64
 var partitionLag map[int32]*stats.Gauge64
-var tlsEnabled bool
-var tlsSkipVerify bool
-var tlsClientCert string
-var tlsClientKey string
-var saslEnabled bool
-var saslMechanism string
-var saslUsername string
-var saslPassword string
+var kafkaNet *kafka.KafkaNet
 
 var FlagSet *flag.FlagSet
 
@@ -56,14 +48,9 @@ func init() {
 	FlagSet.StringVar(&partitionStr, "partitions", "*", "kafka partitions to consume. use '*' or a comma separated list of id's. This should match the partitions used for kafka-mdm-in")
 	FlagSet.StringVar(&offsetStr, "offset", "newest", "Set the offset to start consuming from. Can be oldest, newest or a time duration")
 	FlagSet.StringVar(&backlogProcessTimeoutStr, "backlog-process-timeout", "60s", "Maximum time backlog processing can block during metrictank startup. Setting to a low value may result in data loss")
-	FlagSet.BoolVar(&tlsEnabled, "tls-enabled", false, "Whether to enable TLS")
-	FlagSet.BoolVar(&tlsSkipVerify, "tls-skip-verify", false, "Whether to skip TLS server cert verification")
-	FlagSet.StringVar(&tlsClientCert, "tls-client-cert", "", "Client cert for client authentication (use with -tls-enabled and -tls-client-key)")
-	FlagSet.StringVar(&tlsClientKey, "tls-client-key", "", "Client key for client authentication (use with -tls-enabled and -tls-client-cert)")
-	FlagSet.BoolVar(&saslEnabled, "sasl-enabled", false, "Whether to enable SASL")
-	FlagSet.StringVar(&saslMechanism, "sasl-mechanism", "", "The SASL mechanism configuration (possible values: SCRAM-SHA-256, SCRAM-SHA-512, PLAINTEXT)")
-	FlagSet.StringVar(&saslUsername, "sasl-username", "", "Username for client authentication (use with -sasl-enabled and -sasl-password)")
-	FlagSet.StringVar(&saslPassword, "sasl-password", "", "Password for client authentication (use with -sasl-enabled and -sasl-user)")
+
+	kafkaNet = kafka.ConfigNet(FlagSet)
+
 	globalconf.Register("kafka-cluster", FlagSet, flag.ExitOnError)
 }
 
@@ -97,33 +84,7 @@ func ConfigProcess(instance string) {
 	config.Producer.Return.Successes = true
 	config.Producer.Partitioner = sarama.NewManualPartitioner
 
-	if tlsEnabled {
-		tlsConfig, err := tls.NewConfig(tlsClientCert, tlsClientKey)
-		if err != nil {
-			log.Fatalf("Failed to create TLS config: %s", err)
-		}
-
-		config.Net.TLS.Enable = true
-		config.Net.TLS.Config = tlsConfig
-		config.Net.TLS.Config.InsecureSkipVerify = tlsSkipVerify
-	}
-
-	if saslEnabled {
-		if saslMechanism == "SCRAM-SHA-256" {
-			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
-		} else if saslMechanism == "SCRAM-SHA-512" {
-			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-		} else if saslMechanism == "PLAINTEXT" {
-			config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
-		} else {
-			log.Fatalf("Failed to reconize saslMechanism: '%s'", saslMechanism)
-		}
-		config.Net.SASL.Enable = true
-		config.Net.SASL.User = saslUsername
-		config.Net.SASL.Password = saslPassword
-	}
+	kafkaNet.Configure(config)
 
 	err = config.Validate()
 	if err != nil {
